@@ -1,0 +1,41 @@
+---
+title: "P8105_hw6_jih2119"
+author: "Justin Hsie"
+date: "11/21/2018"
+output: github_document
+---
+
+Setup
+
+```{r setup, message = FALSE}
+library(tidyverse)
+```
+
+Tidy data
+
+```{r clean_data, message = FALSE, warning = FALSE}
+hom_data = read_csv("data/homicide-data.csv") %>% 
+  unite(city_state, city:state, sep = ", ") %>% 
+  mutate(solved = 
+           if_else(str_detect(disposition, "Open"), 1, 0)) %>% 
+  filter(city_state != "Dallas, TX",
+         city_state != "Phoenix, AZ", 
+         city_state != "Kansas City, MO", 
+         city_state != "Tulsa, AL") %>% 
+  mutate(victim_race = 
+           if_else(victim_race == "White", "white", "non-white")) %>% 
+  mutate(victim_age = as.numeric(victim_age))
+```
+
+```{r glm}
+balt_data = hom_data %>% 
+  filter(city_state == "Baltimore, MD")
+hom_glm_balt = 
+  glm(solved ~ victim_age + victim_sex + victim_race, data = balt_data)
+balt_table = broom::tidy(hom_glm_balt)
+knitr::kable(balt_table)
+```
+
+
+
+
