@@ -8,7 +8,6 @@ output: github_document
 Setup
 
 ```{r setup, message = FALSE}
-library(MASS)
 library(tidyverse)
 ```
 
@@ -33,14 +32,46 @@ balt_data = hom_data %>%
 hom_glm_balt = 
   glm(solved ~ victim_age + victim_sex + victim_race, data = balt_data,
       family = binomial()) %>%
-  broom::tidy(conf.int = TRUE) %>% 
-  mutate(OR = exp(estimate)) %>% 
-  rename(log_OR = estimate) %>% 
+  broom::tidy() %>% 
+  mutate(OR = exp(estimate),
+         conf_low = exp(estimate - std.error * 1.96),
+         conf_high = exp(estimate + std.error * 1.96)) %>% 
+  select(term, log_OR = estimate, OR, conf_low, conf_high) %>% 
   knitr::kable()
 hom_glm_balt
-
 ```
 
+```{r glm_cities}
+cities_data = hom_data %>% 
+  group_by(city_state) %>% 
+  nest() %>% 
+  mutate(models = map(data, ~glm(
+            solved ~ victim_age + victim_sex + victim_race, 
+            data = .x)),
+         models = map(models, broom::tidy)) %>% 
+  select(-data) %>% 
+  unnest() %>% 
+  mutate(OR = exp(estimate),
+         conf_low = exp(estimate - std.error * 1.96),
+         conf_high = exp(estimate + std.error * 1.96)) %>% 
+  select(city_state, term, log_OR = estimate, OR, conf_low, conf_high) %>%   filter(term == "victim_racenon-white")
+```
 
+```{r cities_glm_plot}
+ggplot(cities_data, 
+       aes(reorder(city_state, 
+                   OR), OR, 
+           color = city_state)) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_high)) +
+  theme_bw() +
+  theme(legend.position = "") +
+  theme(axis.text.x = element_text(angle = 80, hjust = 1)) +
+  theme(axis.text = element_text(size = 7)) +
+  labs(
+    title = "Odds Ratios of Homicides in non-whites vs whites",
+    x = "City, State",
+    y = "OR")
+```
 
-
+Boston, MA has the lowest odds ratio while Tampa, FL has the highest odds ratio. All odds ratios are below one except for Durham, NC, Birmingham, AL, and Tampa, FL. This means that victims who are non-white are less likely to have their homicide resolved, with exception to the three cities mentioned. 

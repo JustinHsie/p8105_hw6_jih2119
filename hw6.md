@@ -6,7 +6,6 @@ Justin Hsie
 Setup
 
 ``` r
-library(MASS)
 library(tidyverse)
 ```
 
@@ -31,16 +30,55 @@ balt_data = hom_data %>%
 hom_glm_balt = 
   glm(solved ~ victim_age + victim_sex + victim_race, data = balt_data,
       family = binomial()) %>%
-  broom::tidy(conf.int = TRUE) %>% 
-  mutate(OR = exp(estimate)) %>% 
-  rename(log_OR = estimate) %>% 
+  broom::tidy() %>% 
+  mutate(OR = exp(estimate),
+         conf_low = exp(estimate - std.error * 1.96),
+         conf_high = exp(estimate + std.error * 1.96)) %>% 
+  select(term, log_OR = estimate, OR, conf_low, conf_high) %>% 
   knitr::kable()
 hom_glm_balt
 ```
 
-| term                  |     log\_OR|  std.error|  statistic|    p.value|    conf.low|   conf.high|         OR|
-|:----------------------|-----------:|----------:|----------:|----------:|-----------:|-----------:|----------:|
-| (Intercept)           |   1.1860305|  0.2346173|   5.055170|  0.0000004|   0.7304353|   1.6510016|  3.2740589|
-| victim\_age           |  -0.0069900|  0.0032627|  -2.142423|  0.0321594|  -0.0134243|  -0.0006274|  0.9930344|
-| victim\_sexMale       |  -0.8877869|  0.1360573|  -6.525097|  0.0000000|  -1.1557600|  -0.6218669|  0.4115656|
-| victim\_racenon-white |  -0.8195997|  0.1746156|  -4.693738|  0.0000027|  -1.1642313|  -0.4785693|  0.4406080|
+| term                  |     log\_OR|         OR|  conf\_low|  conf\_high|
+|:----------------------|-----------:|----------:|----------:|-----------:|
+| (Intercept)           |   1.1860305|  3.2740589|  2.0671700|   5.1855735|
+| victim\_age           |  -0.0069900|  0.9930344|  0.9867043|   0.9994050|
+| victim\_sexMale       |  -0.8877869|  0.4115656|  0.3152280|   0.5373452|
+| victim\_racenon-white |  -0.8195997|  0.4406080|  0.3129079|   0.6204234|
+
+``` r
+cities_data = hom_data %>% 
+  group_by(city_state) %>% 
+  nest() %>% 
+  mutate(models = map(data, ~glm(
+            solved ~ victim_age + victim_sex + victim_race, 
+            data = .x)),
+         models = map(models, broom::tidy)) %>% 
+  select(-data) %>% 
+  unnest() %>% 
+  mutate(OR = exp(estimate),
+         conf_low = exp(estimate - std.error * 1.96),
+         conf_high = exp(estimate + std.error * 1.96)) %>% 
+  select(city_state, term, log_OR = estimate, OR, conf_low, conf_high) %>%   filter(term == "victim_racenon-white")
+```
+
+``` r
+ggplot(cities_data, 
+       aes(reorder(city_state, 
+                   OR), OR, 
+           color = city_state)) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_high)) +
+  theme_bw() +
+  theme(legend.position = "") +
+  theme(axis.text.x = element_text(angle = 80, hjust = 1)) +
+  theme(axis.text = element_text(size = 7)) +
+  labs(
+    title = "Odds Ratios of Homicides in non-whites vs whites",
+    x = "City, State",
+    y = "OR")
+```
+
+![](hw6_files/figure-markdown_github/cities_glm_plot-1.png)
+
+Boston, MA has the lowest odds ratio while Tampa, FL has the highest odds ratio. All odds ratios are below one except for Durham, NC, Birmingham, AL, and Tampa, FL. This means that victims who are non-white are less likely to have their homicide resolved, with exception to the three cities mentioned.
