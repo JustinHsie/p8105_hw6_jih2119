@@ -8,6 +8,7 @@ output: github_document
 Setup
 
 ```{r setup, message = FALSE}
+library(MASS)
 library(tidyverse)
 ```
 
@@ -17,23 +18,27 @@ Tidy data
 hom_data = read_csv("data/homicide-data.csv") %>% 
   unite(city_state, city:state, sep = ", ") %>% 
   mutate(solved = 
-           if_else(str_detect(disposition, "Open"), 1, 0)) %>% 
-  filter(city_state != "Dallas, TX",
-         city_state != "Phoenix, AZ", 
-         city_state != "Kansas City, MO", 
-         city_state != "Tulsa, AL") %>% 
+           if_else(disposition == "Closed by arrest", 1, 0)) 
+  omit = c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")
+hom_data = filter(hom_data, !city_state %in% omit) %>% 
   mutate(victim_race = 
-           if_else(victim_race == "White", "white", "non-white")) %>% 
-  mutate(victim_age = as.numeric(victim_age))
+           if_else(victim_race == "White", "white", "non-white"),
+         victim_race = fct_relevel(victim_race, "white"), 
+         victim_age = as.numeric(victim_age))
 ```
 
-```{r glm}
+```{r glm_balt}
 balt_data = hom_data %>% 
   filter(city_state == "Baltimore, MD")
 hom_glm_balt = 
-  glm(solved ~ victim_age + victim_sex + victim_race, data = balt_data)
-balt_table = broom::tidy(hom_glm_balt)
-knitr::kable(balt_table)
+  glm(solved ~ victim_age + victim_sex + victim_race, data = balt_data,
+      family = binomial()) %>%
+  broom::tidy(conf.int = TRUE) %>% 
+  mutate(OR = exp(estimate)) %>% 
+  rename(log_OR = estimate) %>% 
+  knitr::kable()
+hom_glm_balt
+
 ```
 
 
