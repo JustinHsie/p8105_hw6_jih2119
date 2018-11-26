@@ -3,13 +3,16 @@ P8105\_hw6\_jih2119
 Justin Hsie
 11/21/2018
 
-Setup
+#### Setup
 
 ``` r
 library(tidyverse)
+library(modelr)
 ```
 
-Tidy data
+### Problem 1
+
+#### Tidy data
 
 ``` r
 hom_data = read_csv("data/homicide-data.csv") %>% 
@@ -23,6 +26,8 @@ hom_data = filter(hom_data, !city_state %in% omit) %>%
          victim_race = fct_relevel(victim_race, "white"), 
          victim_age = as.numeric(victim_age))
 ```
+
+#### Baltimore Data
 
 ``` r
 balt_data = hom_data %>% 
@@ -46,6 +51,8 @@ hom_glm_balt
 | victim\_sexMale       |  -0.8877869|  0.4115656|  0.3152280|   0.5373452|
 | victim\_racenon-white |  -0.8195997|  0.4406080|  0.3129079|   0.6204234|
 
+#### All cities
+
 ``` r
 cities_data = hom_data %>% 
   group_by(city_state) %>% 
@@ -62,6 +69,8 @@ cities_data = hom_data %>%
   select(city_state, term, log_OR = estimate, OR, conf_low, conf_high) %>%   filter(term == "victim_racenon-white")
 ```
 
+#### All cities plot
+
 ``` r
 ggplot(cities_data, 
        aes(reorder(city_state, 
@@ -76,9 +85,61 @@ ggplot(cities_data,
   labs(
     title = "Odds Ratios of Homicides in non-whites vs whites",
     x = "City, State",
-    y = "OR")
+    y = "Adjusted OR")
 ```
 
 ![](hw6_files/figure-markdown_github/cities_glm_plot-1.png)
 
 Boston, MA has the lowest odds ratio while Tampa, FL has the highest odds ratio. All odds ratios are below one except for Durham, NC, Birmingham, AL, and Tampa, FL. This means that victims who are non-white are less likely to have their homicide resolved, with exception to the three cities mentioned.
+
+### Problem 2
+
+#### Tidy data
+
+``` r
+baby = read_csv("data/birthweight.csv") %>% 
+  mutate(babysex = as.factor(babysex),
+         frace = as.factor(frace),
+         malform = as.factor(malform),
+         mrace = as.factor(mrace))
+```
+
+Here I use stepwise regression to find influential predictors.
+
+``` r
+baby_fullglm = glm(bwt ~ ., data = baby)
+baby_step = step(baby_fullglm, direction = "backward", trace = 0) %>% 
+  broom::tidy() %>% 
+  knitr::kable()
+baby_step
+```
+
+| term        |       estimate|    std.error|   statistic|    p.value|
+|:------------|--------------:|------------:|-----------:|----------:|
+| (Intercept) |  -6098.8219113|  137.5463421|  -44.340124|  0.0000000|
+| babysex2    |     28.5580171|    8.4548958|    3.377690|  0.0007374|
+| bhead       |    130.7770408|    3.4465672|   37.944144|  0.0000000|
+| blength     |     74.9471109|    2.0190479|   37.120027|  0.0000000|
+| delwt       |      4.1067316|    0.3920592|   10.474775|  0.0000000|
+| fincome     |      0.3180229|    0.1747477|    1.819898|  0.0688436|
+| gaweeks     |     11.5924873|    1.4620657|    7.928842|  0.0000000|
+| mheight     |      6.5940377|    1.7848817|    3.694383|  0.0002231|
+| mrace2      |   -138.7924801|    9.9070869|  -14.009414|  0.0000000|
+| mrace3      |    -74.8867755|   42.3146313|   -1.769761|  0.0768374|
+| mrace4      |   -100.6781427|   19.3246910|   -5.209819|  0.0000002|
+| parity      |     96.3046933|   40.3362158|    2.387549|  0.0170038|
+| ppwt        |     -2.6755853|    0.4273585|   -6.260752|  0.0000000|
+| smoken      |     -4.8434197|    0.5855757|   -8.271210|  0.0000000|
+
+Because there are still too many predictors, I will choose to keep bhead, parity, and blength because of the large coefficients.
+
+``` r
+baby_glm = glm(bwt ~ bhead + parity + blength, data = baby)
+baby %>% 
+  add_predictions(baby_glm) %>% 
+  add_residuals(baby_glm) %>% 
+  ggplot(aes(x = pred, y = resid)) +
+    geom_point(alpha = 0.2)
+```
+
+![](hw6_files/figure-markdown_github/baby_glm-1.png)
