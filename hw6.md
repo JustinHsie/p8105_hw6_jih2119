@@ -104,6 +104,8 @@ baby = read_csv("data/birthweight.csv") %>%
          mrace = as.factor(mrace))
 ```
 
+#### Regression Model
+
 Here I use stepwise regression to find influential predictors.
 
 ``` r
@@ -139,7 +141,64 @@ baby %>%
   add_predictions(baby_glm) %>% 
   add_residuals(baby_glm) %>% 
   ggplot(aes(x = pred, y = resid)) +
-    geom_point(alpha = 0.2)
+    geom_point(alpha = 0.2) +
+    theme_bw() +
+    theme(legend.position = "") +
+    labs(
+    title = "Predicted Value vs Residuals",
+    x = "Predicted Value",
+    y = "Residuals")
 ```
 
 ![](hw6_files/figure-markdown_github/baby_glm-1.png)
+
+The data are clumped together between 2500 and 4000 for predicted value and around 0 for residuals. For it to be a good model, the data should be spread across evenly across predicted values around a 0 residual value.
+
+#### Cross Validation
+
+##### Models
+
+``` r
+gest_glm = glm(bwt ~ blength + gaweeks, data = baby)
+head_glm = glm(bwt ~ bhead + blength + babysex + 
+                 bhead * blength + bhead * babysex + blength * babysex
+               + bhead * blength * babysex, data = baby)
+```
+
+##### Cross validation and RMSE
+
+``` r
+cv = 
+  crossv_mc(baby, 100) %>% 
+  mutate(baby_glm = map(train, ~lm(bwt ~ bhead + parity + blength, 
+                                   data = .x)),
+         gest_glm = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+         head_glm = map(train, ~lm(bwt ~ bhead + blength + babysex + 
+                 bhead * blength + bhead * babysex + blength * babysex
+               + bhead * blength * babysex, data = baby))) %>% 
+  mutate(rmse_baby = map2_dbl(baby_glm, test, ~rmse(model = .x, 
+                                                   data = .y)),
+         rmse_gest = map2_dbl(gest_glm, test, ~rmse(model = .x, 
+                                                      data = .y)),
+         rmse_head = map2_dbl(head_glm, test, ~rmse(model = .x, 
+                                                      data = .y)))
+```
+
+##### RMSE plot
+
+``` r
+cv %>% 
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin() +
+  labs(
+    title = "Models and RMSE",
+    x = "Model",
+    y = "RMSE")
+```
+
+![](hw6_files/figure-markdown_github/rmse_plot-1.png)
+
+The plot shows that the model with head circumference, length, sex, and all interactions seems to be pretty similar to my model with head circumference, length, and parity. Both models have low RMSE. The model with gestational age and length was the worst with the highest RMSE.
